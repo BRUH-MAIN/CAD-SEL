@@ -1,0 +1,24 @@
+# Ensure that large files are handled by Git LFS
+*.pth filter=lfs diff=lfs merge=lfs -text
+*.pkl filter=lfs diff=lfs merge=lfs -text
+*.h5 filter=lfs diff=lfs merge=lfs -text
+*.hdf5 filter=lfs diff=lfs merge=lfs -text
+*.zip filter=lfs diff=lfs merge=lfs -text
+*.tar.gz filter=lfs diff=lfs merge=lfs -text
+
+# Ensure that text files are handled as text
+*.py text
+*.md text
+*.txt text
+*.sh text
+*.yaml text
+*.yml text
+*.json text
+
+# Ensure that binary files are handled as binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.mp4 binary
+*.avi binary

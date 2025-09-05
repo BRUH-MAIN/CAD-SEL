@@ -1,0 +1,122 @@
+# Data files - ignore original datasets
+data/
+data_bak/
+data_no_crop/
+data_train/
+*.zip
+
+# Training outputs and checkpoints
+checkpoints/
+output*/
+evaluation_results/
+evaluation_results_*/
+
+# Model weight files
+*.pth
+*.pkl
+*.h5
+*.hdf5
+
+# Visualization outputs
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.avi
+
+# Log files
+*.log
+logs/
+tensorboard_logs/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating system
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Statistics and report files
+*.txt
+*.csv
+*.xlsx
+*.xls
+*.md
+report.md
+directory_structure_report.md
+patient_data_analysis.csv
+patient_directory_analysis.csv
+
+# Script outputs
+WL.txt
+EUS.txt
+dataset.EUS.txt
+dataset.WL.txt
+
+# Archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Large files
+*.bin
+*.dat
+
+# Useless scripts
+dataset_statistics.py
+check*.py
+count*.py
+cpfolder.sh
+rename_categories.py
+
+# Keep core code files (explicitly include with !)
+!train.py
+!evaluate.py
+!dataloader.py
+!models/
+!models/model.py
+!evaluate_results.py
+
+# Keep README and documentation
+!README.md
+!requirements.txt
+!setup.py
+!LICENSE
+
+# Keep configuration files
+!*.yaml
+!*.yml
+!*.json
+!*.toml
