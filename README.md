@@ -70,9 +70,6 @@ CAD-SEL/
 ├── dataloader.py             # Dataset and data loading
 ├── train.py                  # Training script
 ├── evaluate.py               # Evaluation script
-├── dataset_statistics.py     # Dataset analysis tools
-├── check_data_correspondence.py  # Data validation
-├── rename_categories.py      # Data preprocessing
 ├── run_eval.sh              # Batch evaluation script
 └── README.md                # This file
 ```
