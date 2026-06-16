@@ -1,6 +1,7 @@
 import argparse
 import json
 import shutil
+import subprocess
 import tarfile
 import urllib.error
 import urllib.request
@@ -13,9 +14,11 @@ from prepare_cad_sel_dataset import prepare_dataset
 
 ARTICLE_ID = "29945483"
 FILE_ID = "62374693"
-DEFAULT_DOWNLOAD_URL = f"https://figshare.com/ndownloader/files/{FILE_ID}"
+DEFAULT_DOWNLOAD_URL = f"https://ndownloader.figshare.com/files/{FILE_ID}"
 FIGSHARE_API_URL = f"https://api.figshare.com/v2/articles/{ARTICLE_ID}"
 EXPECTED_IMAGE_COUNT = 4912
+EXPECTED_ARCHIVE_SIZE = 11437992919
+MIN_ARCHIVE_SIZE = 1024 * 1024 * 1024
 
 
 def parse_args():
@@ -99,7 +102,13 @@ def parse_args():
 def request_url(url):
     request = urllib.request.Request(
         url,
-        headers={"User-Agent": "CAD-SEL downloader"},
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+            ),
+            "Accept": "*/*",
+        },
     )
     return urllib.request.urlopen(request)
 
@@ -124,6 +133,7 @@ def download_file(url, archive_path, force=False):
     archive_path = Path(archive_path)
     if archive_path.exists() and not force:
         print(f"Archive already exists: {archive_path}")
+        validate_archive_download(archive_path)
         return archive_path
 
     archive_path.parent.mkdir(parents=True, exist_ok=True)
@@ -157,8 +167,28 @@ def download_file(url, archive_path, force=False):
                 next_report = downloaded + 256 * 1024 * 1024
 
     tmp_path.replace(archive_path)
+    validate_archive_download(archive_path)
     print("Download complete.")
     return archive_path
+
+
+def validate_archive_download(archive_path):
+    size = archive_path.stat().st_size
+    print(f"Downloaded size: {size / 1024 / 1024 / 1024:.2f} GiB")
+
+    if size < MIN_ARCHIVE_SIZE:
+        magic = read_magic_bytes(archive_path)
+        raise RuntimeError(
+            f"Downloaded file is too small to be the CAD-SEL archive: {archive_path} "
+            f"({size} bytes). First bytes: {magic!r}. "
+            "Try rerunning with --force-download --use-api-url."
+        )
+
+    if EXPECTED_ARCHIVE_SIZE and abs(size - EXPECTED_ARCHIVE_SIZE) > 1024 * 1024:
+        print(
+            "Warning: downloaded size differs from figshare metadata. "
+            f"Expected about {EXPECTED_ARCHIVE_SIZE} bytes, got {size} bytes."
+        )
 
 
 def safe_extract_zip(archive_path, extract_dir):
@@ -209,7 +239,7 @@ def extract_archive(archive_path, extract_dir, force=False):
     elif tarfile.is_tarfile(archive_path):
         safe_extract_tar(archive_path, extract_dir)
     else:
-        raise ValueError(f"Unsupported archive format: {archive_path}")
+        extract_with_7z(archive_path, extract_dir)
 
     dataset_root = find_dataset_root(extract_dir)
     if not dataset_root:
@@ -219,6 +249,37 @@ def extract_archive(archive_path, extract_dir, force=False):
 
     print(f"Extracted dataset root: {dataset_root}")
     return dataset_root
+
+
+def extract_with_7z(archive_path, extract_dir):
+    seven_zip = shutil.which("7z") or shutil.which("7za") or shutil.which("7zr")
+    if not seven_zip:
+        magic = read_magic_bytes(archive_path)
+        raise ValueError(
+            f"Unsupported archive format: {archive_path}. "
+            f"First bytes: {magic!r}. Install p7zip/7z or pass a ZIP/TAR archive."
+        )
+
+    print("Archive is not ZIP/TAR according to Python; trying 7z extractor.")
+    command = [
+        seven_zip,
+        "x",
+        "-y",
+        f"-o{extract_dir}",
+        str(archive_path),
+    ]
+    result = subprocess.run(command, check=False)
+    if result.returncode != 0:
+        magic = read_magic_bytes(archive_path)
+        raise ValueError(
+            f"7z could not extract {archive_path}. "
+            f"First bytes: {magic!r}."
+        )
+
+
+def read_magic_bytes(path, size=64):
+    with Path(path).open("rb") as handle:
+        return handle.read(size)
 
 
 def find_dataset_root(root):
