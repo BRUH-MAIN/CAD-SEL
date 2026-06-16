@@ -30,6 +30,11 @@ evaluation_results_*/
 logs/
 tensorboard_logs/
 
+# Secrets
+.env
+.env.*
+!.env.example
+
 # Python cache
 __pycache__/
 *.py[cod]
@@ -66,6 +71,7 @@ Thumbs.db
 *.temp
 temp/
 tmp/
+.hf_upload_staging/
 
 # Statistics and report files
 *.txt

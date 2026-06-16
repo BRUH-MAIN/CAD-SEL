@@ -139,6 +139,43 @@ This repository now supports the paper's two task types:
 
 For exact numerical reproduction of the paper tables, the original train/test split files and training details are still important. The current code performs patient-level random train/validation splitting with seed `42`, which avoids image-level leakage but may not match the authors' unpublished experimental split exactly.
 
+## Upload Prepared Data To Hugging Face
+
+If Kaggle runs out of space while extracting the figshare ZIP, prepare the dataset on a machine with enough disk and upload only the processed layout to Hugging Face:
+
+```bash
+cp .env.example .env
+# edit .env and set HF_TOKEN=hf_...
+
+python upload_prepared_dataset_to_hf.py \
+    --repo-id RohanRamesh/CAD-SEL \
+    --include-metadata
+```
+
+This uses Hugging Face's resumable `upload_large_folder` path by default. It first builds `.hf_upload_staging/` with hardlinks/copies arranged exactly as they should appear in the dataset repo, then uploads that staging folder. If the upload is interrupted, rerun the same command and it will resume from the local Hugging Face upload cache.
+
+The upload script only sends:
+
+```text
+data/Images/Full
+data/Labels/Full
+data/metadata.xlsx  # optional, with --include-metadata
+```
+
+Use `--private` if you want the Hugging Face dataset repo created privately.
+
+For maximum upload throughput, you can also set:
+
+```bash
+set HF_XET_HIGH_PERFORMANCE=1   # Windows PowerShell: $env:HF_XET_HIGH_PERFORMANCE="1"
+```
+
+In Kaggle, you can then download the prepared Hugging Face dataset instead of the figshare ZIP:
+
+```bash
+python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='RohanRamesh/CAD-SEL', repo_type='dataset', local_dir='.', local_dir_use_symlinks=False)"
+```
+
 ## Supported Models
 
 - `fasterrcnn_resnet`
@@ -163,6 +200,7 @@ CAD-SEL/
   evaluate_results.py
   download_cad_sel_dataset.py
   prepare_cad_sel_dataset.py
+  upload_prepared_dataset_to_hf.py
   run_eval.sh
   README.md
 ```

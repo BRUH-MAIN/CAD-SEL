@@ -2,6 +2,8 @@ import os
 import torch
 import torch.optim as optim
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend to avoid tkinter threading errors
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import cv2
