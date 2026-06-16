@@ -1,90 +1,172 @@
-# CAD-SEL: A dual-modal colonoscopy dataset of subepithelial lesion
+# CAD-SEL
 
-A deep learning-based computer-aided diagnosis system for detecting and classifying neuroendocrine tumors (NETs) in endoscopic images.
+CAD-SEL is a dual-modal colonoscopy dataset and baseline object-detection codebase for colorectal subepithelial lesions (SELs). It supports white-light endoscopy (WLE) and endoscopic ultrasound (EUS) images with YOLO-format bounding-box labels.
 
-## Project Overview
+## Dataset Layout
 
-CAD-SEL is a comprehensive medical AI system designed to assist in the diagnosis of neuroendocrine tumors using both white-light endoscopy (WL) and endoscopic ultrasound (EUS) images. The system supports multiple state-of-the-art object detection models and provides detailed performance analysis.
+The downloaded figshare/PDF dataset is organized like this:
 
+```text
+data/
+  Images/
+    Center-1/
+      WLE-Set/
+        NET_G1/<patient>/*.tiff
+        NET_G2/<patient>/*.tiff
+        Leiomyoma/<patient>/*.tiff
+        Lipoma/<patient>/*.tiff
+        NonNeoplasm/<patient>/*.tiff
+      EUS-Set/
+        ...
+    Center-2/
+    ...
+  Labels/
+    Center-1/
+      WLE-Set/
+        NET_G1/<patient>/*.txt
+        ...
+  metadata.xlsx
+```
 
-## Supported Models
+The original training code expects a derived layout where modality folders are named `NET-WL` and `NET-EUS`:
 
-### Faster R-CNN Series
-- `fasterrcnn_resnet`: ResNet50-FPN backbone
-- `fasterrcnn_resnet50_fpn_v2`: ResNet50-FPN V2
-- `fasterrcnn_mobilenet`: MobileNetV3-Large-FPN (lightweight)
-- `fasterrcnn_mobilenet_320`: 320px input version
-- `fasterrcnn_mobilenet_320_v2`: 320px V2 version
+```text
+data/Images/Full/NET-WL/<category>/<patient>/*.tiff
+data/Labels/Full/NET-WL/<category>/<patient>/*.txt
+data/Images/Full/NET-EUS/<category>/<patient>/*.tiff
+data/Labels/Full/NET-EUS/<category>/<patient>/*.txt
+```
 
-### Other Detection Models
-- **SSD Series**: SSD300-VGG16, SSDLite320-MobileNetV3
-- **RetinaNet Series**: RetinaNet-ResNet50-FPN and V2
-- **FCOS**: FCOS-ResNet50-FPN
-
-## 🚀 Quick Start
-
-### Installation
+In a Kaggle notebook, after cloning this repo, download and prepare everything with:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/CAD-SEL.git
-cd CAD-SEL
+python download_cad_sel_dataset.py
+```
 
-# Install dependencies
+This downloads the figshare file from `https://figshare.com/articles/dataset/CAD-SEL/29945483?file=62374693`, extracts it under `data/raw`, and creates the training-ready compatibility layout under `data/Images/Full` and `data/Labels/Full`.
+
+If you already downloaded and extracted the dataset manually, create only the compatibility layout:
+
+```bash
+python prepare_cad_sel_dataset.py --source data --destination data --split-name Full
+```
+
+By default these scripts use `--link-mode auto`, which tries hardlinks first and falls back to copies if needed. Use `--link-mode copy` if you want independent files.
+
+## Installation
+
+```bash
 pip install -r requirements.txt
 ```
 
-### Training
+## Training
+
+Train a multi-class WLE model:
 
 ```bash
-# Train a Faster R-CNN model on WL dataset
 python train.py \
     --model_type fasterrcnn_mobilenet_320 \
-    --images_dir data/Images/Internal/NET-WL/ \
-    --labels_dir data/Labels/Internal/NET-WL/ \
+    --images_dir data/Images/Full/NET-WL \
+    --labels_dir data/Labels/Full/NET-WL \
     --epochs 100 \
     --batch_size 16 \
     --learning_rate 0.001 \
-    --output_dir checkpoints/output_model
+    --output_dir output_fasterrcnn_mobilenet_320_WL
 ```
 
-### Evaluation
+Train a multi-class EUS model:
 
 ```bash
-# Evaluate a trained model
-python evaluate.py \
-    --model_path checkpoints/best_model.pth \
+python train.py \
     --model_type fasterrcnn_mobilenet_320 \
-    --images_dir data/Images/Internal/NET-WL/ \
-    --labels_dir data/Labels/Internal/NET-WL/ \
-    --output_dir evaluation_results \
+    --images_dir data/Images/Full/NET-EUS \
+    --labels_dir data/Labels/Full/NET-EUS \
+    --epochs 100 \
+    --batch_size 16 \
+    --learning_rate 0.001 \
+    --output_dir output_fasterrcnn_mobilenet_320_EUS
+```
+
+For binary NET vs non-NET training, add `--merge_classes`:
+
+```bash
+python train.py \
+    --model_type fasterrcnn_resnet \
+    --images_dir data/Images/Full/NET-WL \
+    --labels_dir data/Labels/Full/NET-WL \
+    --epochs 100 \
+    --batch_size 16 \
+    --learning_rate 0.001 \
+    --output_dir output_fasterrcnn_resnet_WL_binary \
+    --merge_classes
+```
+
+## Evaluation
+
+Evaluate a trained model:
+
+```bash
+python evaluate.py \
+    --model_path output_fasterrcnn_mobilenet_320_WL/best_model_fasterrcnn_mobilenet_320.pth \
+    --model_type fasterrcnn_mobilenet_320 \
+    --images_dir data/Images/Full/NET-WL \
+    --labels_dir data/Labels/Full/NET-WL \
+    --output_dir evaluation_results_fasterrcnn_mobilenet_320_Full_WL \
     --conf_threshold 0.5
 ```
 
+Evaluate a binary model with merged labels:
+
+```bash
+python evaluate.py \
+    --model_path output_fasterrcnn_resnet_WL_binary/best_model_fasterrcnn_resnet.pth \
+    --model_type fasterrcnn_resnet \
+    --images_dir data/Images/Full/NET-WL \
+    --labels_dir data/Labels/Full/NET-WL \
+    --output_dir evaluation_results_fasterrcnn_resnet_Full_WL \
+    --conf_threshold 0.5 \
+    --merge_classes
+```
+
+## Reproducing The Paper
+
+The local dataset matches the CAD-SEL paper totals: 4,912 labelled TIFF images, with 2,817 WLE images and 2,095 EUS images.
+
+This repository now supports the paper's two task types:
+
+- Multi-class detection: class `0` is NET (`NET_G1` and `NET_G2`), class `1` is Leiomyoma, class `2` is Lipoma, and class `3` is NonNeoplasm.
+- Binary detection: use `--merge_classes` to train/evaluate NET as class `0` and all non-NET lesions as class `1`.
+
+For exact numerical reproduction of the paper tables, the original train/test split files and training details are still important. The current code performs patient-level random train/validation splitting with seed `42`, which avoids image-level leakage but may not match the authors' unpublished experimental split exactly.
+
+## Supported Models
+
+- `fasterrcnn_resnet`
+- `fasterrcnn_resnet50_fpn_v2`
+- `fasterrcnn_mobilenet`
+- `fasterrcnn_mobilenet_320`
+- `fasterrcnn_mobilenet_320_v2`
+- `ssd`
+- `ssdlite_mobilenet_large`
+- `fcos_resnet`
+- `retinanet`
+- `retinanet_v2`
+
 ## Project Structure
 
-```
+```text
 CAD-SEL/
-├── models/
-│   └── model.py              # Model architectures and utilities
-├── dataloader.py             # Dataset and data loading
-├── train.py                  # Training script
-├── evaluate.py               # Evaluation script
-├── run_eval.sh              # Batch evaluation script
-└── README.md                # This file
+  models/model.py
+  dataloader.py
+  train.py
+  evaluate.py
+  evaluate_results.py
+  download_cad_sel_dataset.py
+  prepare_cad_sel_dataset.py
+  run_eval.sh
+  README.md
 ```
 
-## Requirements
+## License
 
-- Python 3.7+
-- PyTorch 1.8+
-- torchvision 0.9+
-- OpenCV
-- NumPy
-- Matplotlib
-- pandas
-- tqdm
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License. Check the dataset source for the dataset license.

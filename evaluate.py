@@ -723,7 +723,8 @@ def main():
         labels_root_dir=args.labels_dir,
         img_size=args.img_size,
         batch_size=args.batch_size,
-        is_external=is_external  # Add this parameter
+        is_external=is_external,  # Add this parameter
+        merge_classes=args.merge_classes
     )
     
     # If it's External dataset, force use 'val' as evaluation set

@@ -370,6 +370,7 @@ def train(args):
         'output_dir': args.output_dir,
         'iou_threshold': args.iou_threshold,
         'conf_threshold': args.conf_threshold,
+        'merge_classes': args.merge_classes,
     }
     
     # Set up GPU
@@ -391,7 +392,8 @@ def train(args):
         images_root_dir=config['images_dir'],
         labels_root_dir=config['labels_dir'],
         img_size=config['img_size'],
-        batch_size=config['batch_size']
+        batch_size=config['batch_size'],
+        merge_classes=config['merge_classes']
     )
     
     # Get actual number of classes from label files
@@ -510,7 +512,8 @@ def train(args):
                 'val_loss': val_loss,
                 'class_weights': class_weights.cpu(),
                 'num_classes': actual_num_classes,
-                'model_type': config['model_type']
+                'model_type': config['model_type'],
+                'merge_classes': config['merge_classes']
             }, os.path.join(config['output_dir'], f'best_model_{config["model_type"]}.pth'))
             print(f"  Saved best model with mAP: {mAP:.4f}")
         
@@ -572,6 +575,8 @@ if __name__ == '__main__':
                         help='IoU threshold for mAP calculation')
     parser.add_argument('--conf_threshold', type=float, default=0.5,
                         help='Confidence threshold for detections')
+    parser.add_argument('--merge_classes', action='store_true',
+                        help='Train binary labels: NET as class 0 and all non-NET classes as class 1')
     
     # Output parameters
     parser.add_argument('--output_dir', type=str, default='output',

@@ -14,7 +14,8 @@ class NETDataset(Dataset):
                  labels_root_dir,
                  img_size=640,
                  augment=False,
-                 patient_split=None):
+                 patient_split=None,
+                 merge_classes=False):
         """
         Dataset for NET-WL YOLO object detection.
         
@@ -25,28 +26,31 @@ class NETDataset(Dataset):
             augment (bool): Whether to apply data augmentation
             patient_split (dict, optional): Dict specifying which patients to include in this dataset
                                           e.g., {'WL-G1': ['XXX-G1', 'YYY-G1'], ...} or 'all'
+            merge_classes (bool): Whether to map labels into NET=0 and non-NET=1
         """
         self.images_root_dir = images_root_dir
         self.labels_root_dir = labels_root_dir
         self.img_size = img_size
         self.augment = augment
+        self.merge_classes = merge_classes
         
         # Find all image files and their corresponding labels
         self.image_files = []
         self.label_files = []
+        self.image_categories = []
         self.classes = []
         
         # Get all category directories
-        category_dirs = [d for d in os.listdir(images_root_dir) 
-                        if os.path.isdir(os.path.join(images_root_dir, d))]
+        category_dirs = sorted([d for d in os.listdir(images_root_dir) 
+                        if os.path.isdir(os.path.join(images_root_dir, d))])
         self.classes = category_dirs
         
         for category in category_dirs:
             category_dir = os.path.join(images_root_dir, category)
             
             # Get all patient directories 
-            patient_dirs = [d for d in os.listdir(category_dir) 
-                           if os.path.isdir(os.path.join(category_dir, d))]
+            patient_dirs = sorted([d for d in os.listdir(category_dir) 
+                           if os.path.isdir(os.path.join(category_dir, d))])
             
             # Filter patient directories if patient_split is specified
             if patient_split is not None and patient_split != 'all':
@@ -65,12 +69,12 @@ class NETDataset(Dataset):
                     continue
                 
                 # Get all image files
-                img_extensions = ['*.jpg', '*.jpeg', '*.png', '*.tiff']
+                img_extensions = ['*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff']
                 image_paths = []
                 for ext in img_extensions:
                     image_paths.extend(glob.glob(os.path.join(patient_img_dir, ext)))
                 
-                for img_path in image_paths:
+                for img_path in sorted(image_paths):
                     # Get the corresponding label file path
                     img_name = os.path.basename(img_path)
                     label_name = os.path.splitext(img_name)[0] + '.txt'
@@ -80,6 +84,7 @@ class NETDataset(Dataset):
                     if os.path.exists(label_path):
                         self.image_files.append(img_path)
                         self.label_files.append(label_path)
+                        self.image_categories.append(category)
         
         print(f"Loaded {len(self.image_files)} images from {len(category_dirs)} categories")
     
@@ -90,13 +95,7 @@ class NETDataset(Dataset):
         img_path = self.image_files[idx]
         label_path = self.label_files[idx]
         
-        # Extract category from path
-        parts = img_path.split(os.sep)
-        if 'NET-WL' in self.images_root_dir:
-            category_idx = parts.index('NET-WL') + 1
-        if 'NET-EUS' in self.images_root_dir:
-            category_idx = parts.index('NET-EUS') + 1
-        category = parts[category_idx]
+        category = self.image_categories[idx]
         
         # Load image as numpy array
         img = cv2.imread(img_path)
@@ -111,6 +110,8 @@ class NETDataset(Dataset):
                     values = line.strip().split()
                     if len(values) == 5:
                         class_id = int(values[0])
+                        if self.merge_classes and class_id > 0:
+                            class_id = 1
                         x_center = float(values[1])
                         y_center = float(values[2])
                         w = float(values[3])
@@ -336,7 +337,8 @@ def build_dataloaders(images_root_dir,
                      train_ratio=0.8,
                      num_workers=4,
                      seed=42,
-                     is_external=False):  # Add new parameter
+                     is_external=False,
+                     merge_classes=False):
     """
     Build train and validation dataloaders.
     
@@ -349,6 +351,7 @@ def build_dataloaders(images_root_dir,
         num_workers (int): Number of workers for data loading
         seed (int): Random seed for reproducibility
         is_external (bool): Whether this is external dataset
+        merge_classes (bool): Whether to map labels into NET=0 and non-NET=1
         
     Returns:
         dict: Dictionary containing train and val dataloaders
@@ -360,7 +363,8 @@ def build_dataloaders(images_root_dir,
             labels_root_dir=labels_root_dir,
             img_size=img_size,
             augment=False,  # No data augmentation needed for validation
-            patient_split='all'  # Use all data
+            patient_split='all',  # Use all data
+            merge_classes=merge_classes
         )
         
         dataloader = DataLoader(
@@ -387,7 +391,8 @@ def build_dataloaders(images_root_dir,
             labels_root_dir=labels_root_dir,
             img_size=img_size,
             augment=True,
-            patient_split=splits['train']
+            patient_split=splits['train'],
+            merge_classes=merge_classes
         )
         
         val_dataset = NETDataset(
@@ -395,7 +400,8 @@ def build_dataloaders(images_root_dir,
             labels_root_dir=labels_root_dir,
             img_size=img_size,
             augment=False,
-            patient_split=splits['val']
+            patient_split=splits['val'],
+            merge_classes=merge_classes
         )
         
         train_dataloader = DataLoader(
