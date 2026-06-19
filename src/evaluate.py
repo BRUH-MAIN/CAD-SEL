@@ -40,6 +40,7 @@ def evaluate(
     model: nn.Module,
     loader: torch.utils.data.DataLoader,
     device: torch.device,
+    threshold: float = 0.5,
 ) -> Dict:
     """Run evaluation and collect predictions."""
     model.eval()
@@ -55,7 +56,7 @@ def evaluate(
 
             logits = model(images)
             probs = torch.sigmoid(logits).cpu().numpy().flatten()
-            preds = (probs >= 0.5).astype(np.float32)
+            preds = (probs >= threshold).astype(np.float32)
             targets = labels.cpu().numpy().flatten()
 
             all_preds.append(preds)
@@ -125,9 +126,17 @@ def main():
     # ---- Build model ----
     pretrained = ckpt_config.get("pretrained", True)
     model = build_model(pretrained=pretrained, device=device)
-    model.load_state_dict(checkpoint["model_state_dict"])
+    # Prefer EMA weights (better generalization) over raw weights
+    if "ema_shadow" in checkpoint and checkpoint["ema_shadow"] is not None:
+        model.load_state_dict(checkpoint["ema_shadow"])
+        print("Loaded EMA (exponential moving average) weights")
+    else:
+        model.load_state_dict(checkpoint["model_state_dict"])
+        print("Loaded raw model weights (no EMA found)")
     epoch = checkpoint.get("epoch", "unknown")
+    optimal_threshold = checkpoint.get("optimal_threshold", 0.5)
     print(f"Loaded checkpoint from epoch {epoch}")
+    print(f"Optimal threshold (Youden's J, from val set): {optimal_threshold:.4f}")
 
     # ---- Data ----
     val_transforms = get_val_transforms(image_size)
@@ -148,18 +157,20 @@ def main():
         pin_memory=True,
     )
 
-    # ---- Evaluate ----
-    print("\n--- Running Evaluation ---")
-    results = evaluate(model, test_loader, device)
+    # ---- Evaluate (with optimal threshold from validation) ----
+    print(f"\n--- Running Evaluation (threshold={optimal_threshold:.4f}) ---")
+    results = evaluate(model, test_loader, device, threshold=optimal_threshold)
 
     metrics = compute_metrics(
-        results["targets"], results["probs"], results["preds"]
+        results["targets"], results["probs"], results["preds"],
+        threshold=optimal_threshold,
     )
 
     # ---- Print metrics ----
     print("\n" + "=" * 50)
     print("TEST SET RESULTS")
     print("=" * 50)
+    print(f"  Threshold:   {optimal_threshold:.4f} (Youden's J from val)")
     print(f"  Accuracy:    {metrics['accuracy']:.4f}")
     print(f"  Precision:   {metrics['precision']:.4f}")
     print(f"  Recall:      {metrics['recall']:.4f}")
@@ -174,7 +185,7 @@ def main():
     os.makedirs(plots_dir, exist_ok=True)
     os.makedirs(reports_dir, exist_ok=True)
 
-    # Classification report
+    # Classification report (using optimal threshold)
     class_names = test_dataset.classes
     report = classification_report(
         results["targets"], results["preds"],
@@ -182,6 +193,7 @@ def main():
     )
     report_path = os.path.join(reports_dir, "classification_report.txt")
     with open(report_path, "w") as f:
+        f.write(f"Threshold: {optimal_threshold:.4f} (Youden's J from validation)\n\n")
         f.write(report)
     print(f"\nClassification Report saved to {report_path}")
     print(report)

@@ -20,7 +20,8 @@ def set_seed(seed: int) -> None:
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    # benchmark=True is safe with fixed input sizes (all images resized to same dims)
+    torch.backends.cudnn.benchmark = True
 
 
 def get_device() -> torch.device:
@@ -81,6 +82,30 @@ def format_metrics(metrics: Dict[str, float], prefix: str = "") -> str:
     for k, v in metrics.items():
         lines.append(f"  {k}: {v:.4f}")
     return "\n".join(lines)
+
+
+def compute_optimal_threshold(
+    targets: np.ndarray,
+    probs: np.ndarray,
+) -> float:
+    """
+    Compute optimal decision threshold via Youden's J statistic
+    (maximising sensitivity + specificity - 1) on the ROC curve.
+
+    Args:
+        targets: Ground truth binary labels (0/1)
+        probs: Predicted probabilities
+
+    Returns:
+        Optimal threshold value in [0, 1]
+    """
+    from sklearn.metrics import roc_curve
+    if len(np.unique(targets)) < 2:
+        return 0.5
+    fpr, tpr, thresholds = roc_curve(targets, probs)
+    j_scores = tpr - fpr  # Youden's J = sensitivity + specificity - 1
+    idx = np.argmax(j_scores)
+    return float(thresholds[idx])
 
 
 def save_train_log(
